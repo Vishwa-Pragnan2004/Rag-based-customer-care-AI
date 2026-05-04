@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+venv/
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Database (keep schema, ignore data)
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+logs/
+*.log
+
+# FAISS index (regenerated at startup)
+faiss_index/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp/recovery scripts
+recover.py
+restore.py
+fix_frontend.py
+inspect_db.py
+migrate_db.py
+test_fallback.py
+test_result.txt
+chat_test.json
+recovered/

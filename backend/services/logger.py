@@ -1,0 +1,2 @@
+"\"\"\"\nlogger.py — Conversation and query logging service.\n\nLogs to two destinations simultaneously:\n  1. SQLite database — structured, queryable\n  2. Rotating JSON file — human-readable, easy to tail in development\n\nBoth logging destinations
+<truncated 8938 bytes>

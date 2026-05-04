@@ -1,0 +1,2 @@
+"/**\n * SourceBadge.jsx — Displays retrieved document sources for a bot message.\n * Collapsible accordion showing document name, similarity score, and content snippet.\n */\n\nimport { useState } from 'react';\n\nconst ChevronIcon = ({ className }) => 
+<truncated 2872 bytes>
