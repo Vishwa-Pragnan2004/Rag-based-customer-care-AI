@@ -45,24 +45,28 @@ export default function AdminDashboard() {
         <div className="table-header">
           <h3>Status Breakdown</h3>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Status</th>
-              <th>Count</th>
-              <th>Percentage</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(stats.status_breakdown || {}).map(([status, count]) => (
-              <tr key={status}>
-                <td><span className={`status-badge status-${status}`}>{status.replace('_', ' ')}</span></td>
-                <td>{count}</td>
-                <td>{stats.total_appointments ? ((count / stats.total_appointments) * 100).toFixed(1) + '%' : '0%'}</td>
+        <div className="data-table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Count</th>
+                <th>Percentage</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {Object.entries(stats.status_breakdown || {})
+                .filter(([status]) => status !== 'technician_assigned')
+                .map(([status, count]) => (
+                <tr key={status}>
+                  <td><span className={`status-badge status-${status}`}>{status.replace('_', ' ')}</span></td>
+                  <td>{count}</td>
+                  <td>{stats.total_appointments ? ((count / stats.total_appointments) * 100).toFixed(1) + '%' : '0%'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

@@ -1,8 +1,10 @@
-import re, json
+import re, json, logging
 from .llm import LLMService
 from .rag import RAGService
 from .tools import call_tool
 from ..models.schemas import ToolCall
+
+logger = logging.getLogger(__name__)
 
 # Fields required to complete a booking
 BOOKING_FIELDS = ["name", "mobile", "address", "pincode", "service_type"]
@@ -13,7 +15,7 @@ FIELD_PROMPTS = {
     "name": "your full name",
     "mobile": "your mobile number (10 digits)",
     "address": "your full address",
-    "pincode": "your area pincode",
+    "pincode": "your area pincode (6 digits)",
     "service_type": f"the type of service you need ({', '.join(VALID_SERVICES)})",
 }
 
@@ -24,64 +26,85 @@ class AgentPipeline:
         self.rag = RAGService()
 
     # ------------------------------------------------------------------
-    # Extract booking details using regex + simple parsing (more reliable
-    # than asking the small LLM to produce JSON).
+    # Extract booking details using PURE REGEX — no LLM dependency.
     # ------------------------------------------------------------------
     def _extract_booking_details(self, text: str) -> dict:
         details = {}
         text_lower = text.lower()
 
-        # --- service_type ---
+        # === SERVICE TYPE ===
         for svc in VALID_SERVICES:
             if svc in text_lower:
                 details["service_type"] = svc
                 break
-        # common synonyms
         if "service_type" not in details:
             if "install" in text_lower:
                 details["service_type"] = "installation"
-            elif "repair" in text_lower or "fix" in text_lower or "not working" in text_lower:
+            elif any(w in text_lower for w in ["repair", "fix", "not working", "broken"]):
                 details["service_type"] = "repair"
-            elif "amc" in text_lower or "annual" in text_lower or "maintenance" in text_lower:
+            elif any(w in text_lower for w in ["amc", "annual", "maintenance"]):
                 details["service_type"] = "amc"
-            elif "gas" in text_lower or "refill" in text_lower or "coolant" in text_lower:
+            elif any(w in text_lower for w in ["gas", "refill", "coolant"]):
                 details["service_type"] = "gas_refill"
 
-        # --- mobile ---
-        mob = re.search(r'(?:\+91[\s-]?)?([6-9]\d{9})\b', text)
-        if mob:
-            details["mobile"] = mob.group(0).strip()
+        # === MOBILE NUMBER ===
+        # Match 10-digit Indian mobile numbers, with or without +91 prefix
+        mob_match = re.search(r'(?:\+91[\s\-]?)?(\d[\s\-]?)?\b([6-9]\d{9})\b', text)
+        if mob_match:
+            details["mobile"] = mob_match.group(2).strip()
 
-        # --- pincode ---
-        pin = re.search(r'\b(\d{6})\b', text)
-        if pin and pin.group(1) != details.get("mobile", "")[-6:]:
-            details["pincode"] = pin.group(1)
+        # === PINCODE (6-digit number) ===
+        # Find all 6-digit numbers, exclude the mobile number
+        mobile_str = details.get("mobile", "")
+        for pin_match in re.finditer(r'\b(\d{6})\b', text):
+            candidate = pin_match.group(1)
+            # Make sure it's not part of the mobile number
+            if candidate not in mobile_str:
+                details["pincode"] = candidate
+                break
 
-        # --- name (try LLM only for name/address since regex is unreliable) ---
-        # We'll also try a quick LLM extraction as fallback
-        try:
-            llm_details = self._extract_booking_details_llm(text)
-            for field in BOOKING_FIELDS:
-                if field not in details and llm_details.get(field):
-                    details[field] = llm_details[field]
-        except Exception:
-            pass
+        # === NAME ===
+        # Try multiple patterns people commonly use
+        name_patterns = [
+            # "my name is X" / "full name is X" — stop at common next-field words
+            r'(?:my\s+)?(?:full\s+)?name\s+is\s+["\']?([A-Za-z][A-Za-z\s\.]{1,40}?)["\']?\s*(?:[,\.\!]|$|\bmo[bn]ile|\bphone|\bnumber|\baddress|\bpincode|\bfull\b|\bmy\b|\b\d)',
+            # "i am X" / "i'm X" / "this is X"
+            r'(?:i\s+am|i\'m|this\s+is)\s+([A-Za-z][A-Za-z\s\.]{1,30}?)\s*(?:[,\.\!]|$|\bmo[bn]ile|\bphone|\bnumber|\baddress|\bmy\b|\b\d)',
+            # "name: X" or "name = X"
+            r'name\s*[:=]\s*["\']?([A-Za-z][A-Za-z\s\.]{1,40}?)["\']?\s*(?:[,\.\!]|$|\b\d)',
+        ]
+        for pattern in name_patterns:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                name = m.group(1).strip().rstrip(',. ')
+                # Filter out words that are clearly not names
+                skip_words = {"is", "my", "the", "and", "for", "book", "ac", "installation", "repair",
+                              "mobile", "monile", "number", "address", "pincode", "phone", "flat", "house"}
+                if name.lower() not in skip_words and len(name) >= 2:
+                    details["name"] = name
+                    break
 
+        # === ADDRESS ===
+        # Try multiple patterns
+        addr_patterns = [
+            # "address is ..." or "address: ..."
+            r'(?:full\s+)?address\s+(?:is\s+)?[:\-]?\s*(.+?)(?:\s*(?:pincode|pin\s*code|pin\s+is|my\s+pincode|\b\d{6}\b)|$)',
+            # "flat no / house no / house number ..."
+            r'((?:flat|house|door|plot)\s*(?:no|number|num)?\.?\s*\d+[\w\s,\.\-\/]+?)(?:\s*(?:pincode|pin\s*code|pin\s+is|\b\d{6}\b)|$)',
+        ]
+        for pattern in addr_patterns:
+            m = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+            if m:
+                addr = m.group(1).strip().rstrip(',.')
+                # Clean up: remove leading/trailing junk
+                addr = re.sub(r'^\s*[,\.\-:]+\s*', '', addr)
+                addr = re.sub(r'\s*[,\.\-:]+\s*$', '', addr)
+                if len(addr) >= 5:  # Minimum viable address
+                    details["address"] = addr
+                    break
+
+        logger.info(f"[Agent] Extracted details: {details}")
         return details
-
-    def _extract_booking_details_llm(self, text: str) -> dict:
-        prompt = (
-            "Extract these fields from the conversation as JSON: name, mobile, address, pincode, service_type.\n"
-            "Valid service_types: installation, repair, amc, gas_refill.\n"
-            "If a field is not mentioned, set it to null. Output ONLY the JSON object.\n"
-            f"Text: {text}"
-        )
-        res = self.llm.complete([{"role": "user", "content": prompt}])
-        try:
-            s = res[res.find('{'):res.rfind('}') + 1]
-            return json.loads(s)
-        except Exception:
-            return {}
 
     # ------------------------------------------------------------------
     # Build a friendly message asking for missing booking fields
@@ -95,25 +118,42 @@ class AgentPipeline:
         if not missing:
             return None  # All fields present — proceed to booking
 
-        if len(missing) == len(BOOKING_FIELDS) - (1 if details.get("service_type") else 0):
+        collected = {k: v for k, v in details.items() if k in BOOKING_FIELDS and v}
+
+        if len(collected) <= 1:
             # First message — ask for everything
             return (
                 f"{greeting}"
                 "To schedule your appointment, I'll need a few details:\n\n"
                 "1. 📛 **Full Name**\n"
-                "2. 📱 **Mobile Number**\n"
+                "2. 📱 **Mobile Number** (10 digits)\n"
                 "3. 🏠 **Full Address**\n"
-                "4. 📍 **Area Pincode**\n"
+                "4. 📍 **Area Pincode** (6 digits)\n"
                 + (f"5. 🔧 **Service Type** ({', '.join(VALID_SERVICES)})\n" if not details.get("service_type") else "")
                 + "\nPlease provide these details and I'll get your appointment booked right away!"
             )
         else:
-            # Some fields collected, ask for remaining
+            # Show what we collected + ask for remaining
+            got_lines = []
+            if details.get("name"):
+                got_lines.append(f"  ✅ Name: **{details['name']}**")
+            if details.get("mobile"):
+                got_lines.append(f"  ✅ Mobile: **{details['mobile']}**")
+            if details.get("address"):
+                got_lines.append(f"  ✅ Address: **{details['address']}**")
+            if details.get("pincode"):
+                got_lines.append(f"  ✅ Pincode: **{details['pincode']}**")
+            if details.get("service_type"):
+                got_lines.append(f"  ✅ Service: **{details['service_type']}**")
+
             still_need = [FIELD_PROMPTS[f] for f in missing]
+
             return (
-                "Thanks! I still need the following to complete your booking:\n\n"
-                + "\n".join([f"• {item}" for item in still_need])
-                + "\n\nPlease provide these details."
+                "Thanks! Here's what I have so far:\n\n"
+                + "\n".join(got_lines)
+                + "\n\nI still need:\n\n"
+                + "\n".join([f"  ❓ {item}" for item in still_need])
+                + "\n\nPlease provide the missing details."
             )
 
     # ------------------------------------------------------------------
@@ -131,10 +171,15 @@ class AgentPipeline:
         elif any(kw in q_lower for kw in ["escalate", "human", "agent", "talk to", "speak to", "real person"]):
             intent = "escalation"
 
-        # Also check if we're in the middle of a booking conversation
+        # Check if we're in the middle of a booking conversation
         if intent == "general" and history:
-            last_bot = next((h["content"] for h in reversed(history) if h.get("role") == "bot"), "")
-            if any(phrase in last_bot.lower() for phrase in ["to complete your booking", "i'll need a few details", "mobile number", "full name", "full address", "area pincode"]):
+            last_bot = next((h.get("content", "") for h in reversed(history) if h.get("role") == "bot"), "")
+            if any(phrase in last_bot.lower() for phrase in [
+                "to complete your booking", "i'll need a few details",
+                "mobile number", "full name", "full address", "area pincode",
+                "i still need", "provide the missing", "provide these details",
+                "booked right away"
+            ]):
                 intent = "appointment"
 
         tool_calls = []
@@ -142,8 +187,11 @@ class AgentPipeline:
 
         # --- Appointment booking flow ---
         if intent == "appointment":
-            # Gather context from full conversation
-            ctx = " ".join([h["content"] for h in history[-6:]]) + " " + query
+            # Gather ALL user messages from history + current query
+            user_msgs = [h.get("content", "") for h in history if h.get("role") == "user"]
+            user_msgs.append(query)
+            ctx = " ".join(user_msgs)
+
             details = self._extract_booking_details(ctx)
 
             missing = [f for f in BOOKING_FIELDS if not details.get(f)]
@@ -159,47 +207,47 @@ class AgentPipeline:
                         "service_type": details["service_type"],
                     })
                     tool_calls.append(ToolCall(name="book_appointment", arguments=details, result=res))
-                    tool_outputs.append(json.dumps(res))
 
-                    # Build a nice confirmation message directly
                     answer = (
                         f"✅ **Appointment Booked Successfully!**\n\n"
                         f"📋 **Ticket ID:** {res['ticket_id']}\n"
                         f"🔧 **Service:** {details['service_type'].replace('_', ' ').title()}\n"
                         f"👨‍🔧 **Technician:** {res['technician']}\n"
                         f"📅 **Scheduled:** {res['date']}\n"
-                        f"📊 **Status:** {res['status'].title()}\n\n"
+                        f"📊 **Status:** {res['status'].replace('_', ' ').title()}\n\n"
                         f"You can track your appointment anytime by asking me:\n"
                         f'*"Check status of {res["ticket_id"]}"*'
                     )
                     return {"answer": answer, "sources": [], "tool_calls": tool_calls, "intent": intent}
                 except Exception as e:
+                    logger.error(f"Booking error: {e}")
                     return {"answer": f"Sorry, there was an error booking your appointment: {str(e)}", "sources": [], "tool_calls": [], "intent": intent}
             else:
                 # Ask for missing details
-                svc = None
-                for s in VALID_SERVICES:
-                    if s in q_lower or s in " ".join([h.get("content", "") for h in history]).lower():
-                        svc = s
-                        break
-                if "install" in q_lower:
-                    svc = "installation"
+                svc = details.get("service_type")
+                if not svc:
+                    if "install" in ctx.lower():
+                        svc = "installation"
+                    elif "repair" in ctx.lower():
+                        svc = "repair"
                 response = self._build_missing_fields_response(details, svc)
                 return {"answer": response, "sources": [], "tool_calls": [], "intent": intent}
 
         # --- Ticket status flow ---
         elif intent == "ticket_status":
-            m = re.search(r'TKT-\d+', query, re.IGNORECASE)
+            # Search in both the query and recent history for ticket IDs
+            search_text = query + " " + " ".join([h.get("content", "") for h in history[-4:]])
+            m = re.search(r'TKT-\d+', search_text, re.IGNORECASE)
             if m:
-                res = call_tool("get_ticket_status", {"ticket_id": m.group(0).upper()})
-                tool_calls.append(ToolCall(name="get_ticket_status", arguments={"ticket_id": m.group(0).upper()}, result=res))
-                tool_outputs.append(json.dumps(res))
+                ticket_id = m.group(0).upper()
+                res = call_tool("get_ticket_status", {"ticket_id": ticket_id})
+                tool_calls.append(ToolCall(name="get_ticket_status", arguments={"ticket_id": ticket_id}, result=res))
 
                 if res.get("status") == "not_found":
-                    answer = f"❌ Ticket **{m.group(0).upper()}** was not found. Please double-check the ticket ID."
+                    answer = f"❌ Ticket **{ticket_id}** was not found. Please double-check the ticket ID."
                 else:
                     answer = (
-                        f"📋 **Ticket Status: {m.group(0).upper()}**\n\n"
+                        f"📋 **Ticket Status: {ticket_id}**\n\n"
                         f"🔧 **Service:** {res.get('service', 'N/A').replace('_', ' ').title()}\n"
                         f"👨‍🔧 **Technician:** {res.get('tech', 'Not assigned')}\n"
                         f"📅 **Scheduled:** {res.get('date', 'TBD')}\n"

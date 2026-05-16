@@ -30,32 +30,34 @@ export default function EscalationsPage() {
           <p>No escalations found</p>
         </div>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Ticket ID</th>
-              <th>Customer</th>
-              <th>Mobile</th>
-              <th>Agent</th>
-              <th>ETA</th>
-              <th>Reason</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {escalations.map(e => (
-              <tr key={e.ticket_id}>
-                <td><strong>{e.ticket_id}</strong></td>
-                <td>{e.customer_name || '—'}</td>
-                <td>{e.mobile}</td>
-                <td>{e.agent_name}</td>
-                <td>{e.eta}</td>
-                <td>{e.reason}</td>
-                <td>{e.created_at ? new Date(e.created_at).toLocaleDateString() : '—'}</td>
+        <div className="data-table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Ticket ID</th>
+                <th>Customer</th>
+                <th>Mobile</th>
+                <th>Agent</th>
+                <th>ETA</th>
+                <th>Reason</th>
+                <th>Created</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {escalations.map(e => (
+                <tr key={e.ticket_id}>
+                  <td><strong>{e.ticket_id}</strong></td>
+                  <td>{e.customer_name || '—'}</td>
+                  <td>{e.mobile}</td>
+                  <td>{e.agent_name}</td>
+                  <td>{e.eta}</td>
+                  <td className="wrap-cell">{e.reason}</td>
+                  <td>{e.created_at ? new Date(e.created_at).toLocaleDateString() : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

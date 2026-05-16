@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 class ChatRequest(BaseModel):
     query: str
     conversation_id: str = "default"
-    history: List[Dict[str, str]] = []
+    history: List[Dict[str, Any]] = []
 
 class ToolCall(BaseModel):
     name: str

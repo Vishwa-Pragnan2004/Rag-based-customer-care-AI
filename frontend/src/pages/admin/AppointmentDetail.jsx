@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
 const API = 'http://localhost:8000/api/v1/admin';
-const PIPELINE = ['requested', 'booked', 'technician_assigned', 'in_progress', 'completed'];
-const PIPELINE_LABELS = { requested: 'Requested', booked: 'Booked', technician_assigned: 'Tech Assigned', in_progress: 'In Progress', completed: 'Completed' };
+const PIPELINE = ['requested', 'booked', 'in_progress', 'completed'];
+const PIPELINE_LABELS = { requested: 'Requested', booked: 'Booked', in_progress: 'In Progress', completed: 'Completed' };
 const TECHS = ['Rajesh', 'Amit', 'Vikram', 'Suresh'];
 
 function authHeaders() {
@@ -25,7 +25,24 @@ export default function AppointmentDetail() {
       .then(r => r.json())
       .then(d => {
         setDetail(d);
-        setForm({ status: d.status || '', technician: d.technician || '', arrival_date: d.arrival_date || '', notes: d.notes || '' });
+        // Format arrival_date for datetime-local input (needs YYYY-MM-DDTHH:MM format)
+        let arrivalForInput = '';
+        if (d.arrival_date) {
+          try {
+            const dt = new Date(d.arrival_date);
+            if (!isNaN(dt.getTime())) {
+              arrivalForInput = dt.toISOString().slice(0, 16);
+            }
+          } catch (e) {
+            arrivalForInput = d.arrival_date;
+          }
+        }
+        setForm({
+          status: d.status || '',
+          technician: d.technician || '',
+          arrival_date: arrivalForInput,
+          notes: d.notes || ''
+        });
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -58,7 +75,11 @@ export default function AppointmentDetail() {
   if (loading) return <div className="admin-loading">Loading appointment...</div>;
   if (!detail) return <div className="admin-loading">Appointment not found.</div>;
 
-  const currentIdx = PIPELINE.indexOf(detail.status);
+  // Map legacy statuses to pipeline
+  let displayStatus = detail.status;
+  if (displayStatus === 'scheduled') displayStatus = 'booked';
+  if (displayStatus === 'technician_assigned') displayStatus = 'booked';
+  const currentIdx = PIPELINE.indexOf(displayStatus);
 
   return (
     <>
@@ -107,6 +128,10 @@ export default function AppointmentDetail() {
             <label>Status</label>
             <select value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
               {PIPELINE.map(s => <option key={s} value={s}>{PIPELINE_LABELS[s]}</option>)}
+              {/* Include current status if it's legacy */}
+              {!PIPELINE.includes(form.status) && form.status && (
+                <option value={form.status}>{form.status}</option>
+              )}
             </select>
           </div>
           <div className="form-group">
@@ -114,11 +139,19 @@ export default function AppointmentDetail() {
             <select value={form.technician} onChange={e => setForm({...form, technician: e.target.value})}>
               <option value="">Select technician</option>
               {TECHS.map(t => <option key={t} value={t}>{t}</option>)}
+              {/* Include current tech if not in list */}
+              {form.technician && !TECHS.includes(form.technician) && (
+                <option value={form.technician}>{form.technician}</option>
+              )}
             </select>
           </div>
           <div className="form-group">
             <label>Arrival Date</label>
-            <input type="datetime-local" value={form.arrival_date} onChange={e => setForm({...form, arrival_date: e.target.value})} />
+            <input
+              type="date"
+              value={form.arrival_date ? form.arrival_date.slice(0, 10) : ''}
+              onChange={e => setForm({...form, arrival_date: e.target.value})}
+            />
           </div>
         </div>
         <div className="form-group">

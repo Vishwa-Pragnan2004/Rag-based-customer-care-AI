@@ -238,6 +238,28 @@
   overflow: hidden;
 }
 
+.data-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.data-table-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.data-table-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.02);
+}
+
+.data-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+}
+
+.data-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.2);
+}
+
 .table-header {
   display: flex;
   align-items: center;
@@ -299,12 +321,13 @@
 
 .data-table {
   width: 100%;
+  min-width: 700px;
   border-collapse: collapse;
 }
 
 .data-table th {
   text-align: left;
-  padding: 14px 24px;
+  padding: 14px 20px;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -315,10 +338,17 @@
 }
 
 .data-table td {
-  padding: 14px 24px;
+  padding: 14px 20px;
   font-size: 0.875rem;
   border-bottom: 1px solid rgba(255,255,255,0.04);
-  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.data-table td.wrap-cell {
+  white-space: normal;
+  word-break: break-word;
 }
 
 .data-table tbody tr {
@@ -515,13 +545,20 @@
   padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
+  background-color: #1a1b23;
   color: #e4e4e7;
   font-size: 0.875rem;
   outline: none;
   transition: border-color 0.2s;
   font-family: inherit;
   box-sizing: border-box;
+  color-scheme: dark;
+}
+
+.form-group select option {
+  background-color: #1a1b23;
+  color: #e4e4e7;
+  padding: 8px;
 }
 
 .form-group select:focus,

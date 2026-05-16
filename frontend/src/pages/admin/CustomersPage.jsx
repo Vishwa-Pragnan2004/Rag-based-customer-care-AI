@@ -39,30 +39,32 @@ export default function CustomersPage() {
           <p>No customers found</p>
         </div>
       ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Mobile</th>
-              <th>Address</th>
-              <th>Pincode</th>
-              <th>Appointments</th>
-              <th>Registered</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(c => (
-              <tr key={c.mobile}>
-                <td><strong>{c.name || '—'}</strong></td>
-                <td>{c.mobile}</td>
-                <td>{c.address || '—'}</td>
-                <td>{c.pincode || '—'}</td>
-                <td>{c.appointment_count}</td>
-                <td>{c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}</td>
+        <div className="data-table-scroll">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Mobile</th>
+                <th>Address</th>
+                <th>Pincode</th>
+                <th>Appointments</th>
+                <th>Registered</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map(c => (
+                <tr key={c.mobile}>
+                  <td><strong>{c.name || '—'}</strong></td>
+                  <td>{c.mobile}</td>
+                  <td className="wrap-cell">{c.address || '—'}</td>
+                  <td>{c.pincode || '—'}</td>
+                  <td>{c.appointment_count}</td>
+                  <td>{c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

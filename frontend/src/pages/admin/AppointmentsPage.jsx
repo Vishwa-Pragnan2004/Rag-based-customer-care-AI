@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const API = 'http://localhost:8000/api/v1/admin';
-const STATUSES = ['all', 'requested', 'booked', 'technician_assigned', 'in_progress', 'completed', 'scheduled'];
+const STATUSES = ['all', 'requested', 'booked', 'in_progress', 'completed', 'scheduled'];
 
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('admin_token')}` };
@@ -55,34 +55,36 @@ export default function AppointmentsPage() {
             <p>No appointments found</p>
           </div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Ticket ID</th>
-                <th>Customer</th>
-                <th>Mobile</th>
-                <th>Service</th>
-                <th>Scheduled</th>
-                <th>Technician</th>
-                <th>Status</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(a => (
-                <tr key={a.ticket_id} className="clickable-row" onClick={() => navigate(`/admin/appointments/${a.ticket_id}`)}>
-                  <td><strong>{a.ticket_id}</strong></td>
-                  <td>{a.customer_name || '—'}</td>
-                  <td>{a.mobile}</td>
-                  <td style={{textTransform:'capitalize'}}>{a.service_type}</td>
-                  <td>{a.scheduled_date || '—'}</td>
-                  <td>{a.technician || '—'}</td>
-                  <td><span className={`status-badge status-${a.status}`}>{(a.status || '').replace('_', ' ')}</span></td>
-                  <td>{a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
+          <div className="data-table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Ticket ID</th>
+                  <th>Customer</th>
+                  <th>Mobile</th>
+                  <th>Service</th>
+                  <th>Scheduled</th>
+                  <th>Technician</th>
+                  <th>Status</th>
+                  <th>Created</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map(a => (
+                  <tr key={a.ticket_id} className="clickable-row" onClick={() => navigate(`/admin/appointments/${a.ticket_id}`)}>
+                    <td><strong>{a.ticket_id}</strong></td>
+                    <td>{a.customer_name || '—'}</td>
+                    <td>{a.mobile}</td>
+                    <td style={{textTransform:'capitalize'}}>{a.service_type}</td>
+                    <td>{a.scheduled_date || '—'}</td>
+                    <td>{a.technician || '—'}</td>
+                    <td><span className={`status-badge status-${a.status}`}>{(a.status || '').replace('_', ' ')}</span></td>
+                    <td>{a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>
