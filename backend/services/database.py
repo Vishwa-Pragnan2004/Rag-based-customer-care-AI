@@ -1,12 +1,74 @@
-import sqlite3, os, uuid, datetime, random, bcrypt
+import sqlite3
+import os
+import uuid
+import datetime
+import random
+import bcrypt
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "frostguard.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+def _is_postgres():
+    return DATABASE_URL and (DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://"))
+
+class SQLiteConnectionWrapper:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            self.conn.rollback()
+        else:
+            self.conn.commit()
+        self.conn.close()
+
+    def execute(self, query, params=None):
+        self.conn.row_factory = sqlite3.Row
+        cur = self.conn.cursor()
+        if params is not None:
+            cur.execute(query, params)
+        else:
+            cur.execute(query)
+        return cur
+
+class PostgresConnectionWrapper:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            self.conn.rollback()
+        else:
+            self.conn.commit()
+        self.conn.close()
+
+    def execute(self, query, params=None):
+        # Convert parameter placeholders from sqlite (?) to postgres (%s)
+        query = query.replace("?", "%s")
+        cur = self.conn.cursor(cursor_factory=RealDictCursor)
+        if params is not None:
+            cur.execute(query, params)
+        else:
+            cur.execute(query)
+        return cur
 
 def _get_conn():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if _is_postgres():
+        conn = psycopg2.connect(DATABASE_URL)
+        return PostgresConnectionWrapper(conn)
+    else:
+        db_dir = os.path.join(os.path.dirname(__file__), "..", "db")
+        os.makedirs(db_dir, exist_ok=True)
+        db_path = os.path.join(db_dir, "frostguard.db")
+        conn = sqlite3.connect(db_path)
+        return SQLiteConnectionWrapper(conn)
 
 # ---------------------------------------------------------------------------
 # Status pipeline: requested → booked → technician_assigned → in_progress → completed
@@ -14,53 +76,95 @@ def _get_conn():
 VALID_STATUSES = ["requested", "booked", "technician_assigned", "in_progress", "completed"]
 
 def init_db():
-    with _get_conn() as conn:
-        conn.execute("""CREATE TABLE IF NOT EXISTS customers (
-            mobile TEXT PRIMARY KEY,
-            name TEXT,
-            address TEXT,
-            pincode TEXT,
-            created_at TEXT DEFAULT (datetime('now'))
-        )""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS appointments (
-            ticket_id TEXT PRIMARY KEY,
-            mobile TEXT,
-            service_type TEXT,
-            scheduled_date TEXT,
-            technician TEXT,
-            status TEXT DEFAULT 'requested',
-            arrival_date TEXT,
-            notes TEXT DEFAULT '',
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
-        )""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS escalations (
-            ticket_id TEXT PRIMARY KEY,
-            mobile TEXT,
-            agent_name TEXT,
-            eta TEXT,
-            reason TEXT,
-            created_at TEXT DEFAULT (datetime('now'))
-        )""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS admin_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TEXT DEFAULT (datetime('now'))
-        )""")
+    if _is_postgres():
+        with _get_conn() as conn:
+            conn.execute("""CREATE TABLE IF NOT EXISTS customers (
+                mobile TEXT PRIMARY KEY,
+                name TEXT,
+                address TEXT,
+                pincode TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""")
+            conn.execute("""CREATE TABLE IF NOT EXISTS appointments (
+                ticket_id TEXT PRIMARY KEY,
+                mobile TEXT,
+                service_type TEXT,
+                scheduled_date TEXT,
+                technician TEXT,
+                status TEXT DEFAULT 'requested',
+                arrival_date TEXT,
+                notes TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""")
+            conn.execute("""CREATE TABLE IF NOT EXISTS escalations (
+                ticket_id TEXT PRIMARY KEY,
+                mobile TEXT,
+                agent_name TEXT,
+                eta TEXT,
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""")
+            conn.execute("""CREATE TABLE IF NOT EXISTS admin_users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""")
 
-        # Seed default admin if not exists
-        existing = conn.execute("SELECT id FROM admin_users WHERE username = ?", ("admin",)).fetchone()
-        if not existing:
-            hashed = bcrypt.hashpw("frostguard2024".encode(), bcrypt.gensalt()).decode()
-            conn.execute("INSERT INTO admin_users (username, password_hash) VALUES (?, ?)", ("admin", hashed))
+            # Seed default admin if not exists
+            existing = conn.execute("SELECT id FROM admin_users WHERE username = ?", ("admin",)).fetchone()
+            if not existing:
+                hashed = bcrypt.hashpw("frostguard2024".encode(), bcrypt.gensalt()).decode()
+                conn.execute("INSERT INTO admin_users (username, password_hash) VALUES (?, ?)", ("admin", hashed))
+    else:
+        with _get_conn() as conn:
+            conn.execute("""CREATE TABLE IF NOT EXISTS customers (
+                mobile TEXT PRIMARY KEY,
+                name TEXT,
+                address TEXT,
+                pincode TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )""")
+            conn.execute("""CREATE TABLE IF NOT EXISTS appointments (
+                ticket_id TEXT PRIMARY KEY,
+                mobile TEXT,
+                service_type TEXT,
+                scheduled_date TEXT,
+                technician TEXT,
+                status TEXT DEFAULT 'requested',
+                arrival_date TEXT,
+                notes TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )""")
+            conn.execute("""CREATE TABLE IF NOT EXISTS escalations (
+                ticket_id TEXT PRIMARY KEY,
+                mobile TEXT,
+                agent_name TEXT,
+                eta TEXT,
+                reason TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )""")
+            conn.execute("""CREATE TABLE IF NOT EXISTS admin_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            )""")
 
-        # Migrate: add missing columns to existing tables (safe for re-runs)
-        _migrate_columns(conn)
+            # Seed default admin if not exists
+            existing = conn.execute("SELECT id FROM admin_users WHERE username = ?", ("admin",)).fetchone()
+            if not existing:
+                hashed = bcrypt.hashpw("frostguard2024".encode(), bcrypt.gensalt()).decode()
+                conn.execute("INSERT INTO admin_users (username, password_hash) VALUES (?, ?)", ("admin", hashed))
+
+            # Migrate: add missing columns to existing SQLite tables
+            _migrate_columns(conn)
 
 
 def _migrate_columns(conn):
-    """Add columns that may be missing from older schema versions."""
+    """Add columns that may be missing from older SQLite schema versions."""
     existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(appointments)").fetchall()}
     migrations = {
         "arrival_date": "ALTER TABLE appointments ADD COLUMN arrival_date TEXT",
@@ -129,7 +233,7 @@ def get_all_customers() -> list:
                 "name": r["name"],
                 "address": r["address"],
                 "pincode": r["pincode"],
-                "created_at": r["created_at"],
+                "created_at": str(r["created_at"]),
                 "appointment_count": appt_count,
             })
         return result
@@ -140,7 +244,14 @@ def get_all_customers() -> list:
 # ---------------------------------------------------------------------------
 def book_appointment(name: str, mobile: str, address: str, pincode: str, service_type: str) -> dict:
     with _get_conn() as conn:
-        conn.execute("INSERT OR REPLACE INTO customers (mobile, name, address, pincode) VALUES (?, ?, ?, ?)", (mobile, name, address, pincode))
+        if _is_postgres():
+            conn.execute("""
+                INSERT INTO customers (mobile, name, address, pincode) VALUES (?, ?, ?, ?)
+                ON CONFLICT (mobile) DO UPDATE SET name = EXCLUDED.name, address = EXCLUDED.address, pincode = EXCLUDED.pincode
+            """, (mobile, name, address, pincode))
+        else:
+            conn.execute("INSERT OR REPLACE INTO customers (mobile, name, address, pincode) VALUES (?, ?, ?, ?)", (mobile, name, address, pincode))
+            
         ticket_id = f"TKT-{random.randint(100000, 999999)}"
         date = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:00")
         tech = random.choice(["Rajesh", "Amit", "Vikram", "Suresh"])
@@ -272,18 +383,42 @@ def get_dashboard_stats() -> dict:
 # DB Viewer (raw table access for admin)
 # ---------------------------------------------------------------------------
 def get_db_tables() -> list:
-    with _get_conn() as conn:
-        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
-        result = []
-        for t in tables:
-            count = conn.execute(f"SELECT COUNT(*) as cnt FROM {t['name']}").fetchone()["cnt"]
-            cols = conn.execute(f"PRAGMA table_info({t['name']})").fetchall()
-            result.append({
-                "name": t["name"],
-                "row_count": count,
-                "columns": [{"name": c[1], "type": c[2]} for c in cols],
-            })
-        return result
+    if _is_postgres():
+        with _get_conn() as conn:
+            cur_tables = conn.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """).fetchall()
+            result = []
+            for t in cur_tables:
+                name = t["table_name"]
+                count_res = conn.execute(f"SELECT COUNT(*) as cnt FROM {name}").fetchone()
+                count = count_res["cnt"]
+                cols = conn.execute("""
+                    SELECT column_name, data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = %s AND table_schema = 'public'
+                """, (name,)).fetchall()
+                result.append({
+                    "name": name,
+                    "row_count": count,
+                    "columns": [{"name": c["column_name"], "type": c["data_type"]} for c in cols],
+                })
+            return result
+    else:
+        with _get_conn() as conn:
+            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
+            result = []
+            for t in tables:
+                count = conn.execute(f"SELECT COUNT(*) as cnt FROM {t['name']}").fetchone()["cnt"]
+                cols = conn.execute(f"PRAGMA table_info({t['name']})").fetchall()
+                result.append({
+                    "name": t["name"],
+                    "row_count": count,
+                    "columns": [{"name": c[1], "type": c[2]} for c in cols],
+                })
+            return result
 
 
 def get_table_data(table_name: str, limit: int = 100) -> dict:
@@ -292,25 +427,51 @@ def get_table_data(table_name: str, limit: int = 100) -> dict:
     if table_name not in allowed:
         return {"error": "Table not found"}
 
-    with _get_conn() as conn:
-        cols = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
-        column_names = [c[1] for c in cols]
-        rows = conn.execute(f"SELECT * FROM {table_name} LIMIT ?", (limit,)).fetchall()
+    if _is_postgres():
+        with _get_conn() as conn:
+            cols = conn.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = %s AND table_schema = 'public'
+            """, (table_name,)).fetchall()
+            column_names = [c["column_name"] for c in cols]
+            
+            rows = conn.execute(f"SELECT * FROM {table_name} LIMIT %s", (limit,)).fetchall()
 
-        # Hide password hashes from admin_users
-        data = []
-        for r in rows:
-            row_dict = dict(r)
-            if table_name == "admin_users" and "password_hash" in row_dict:
-                row_dict["password_hash"] = "***hidden***"
-            data.append(row_dict)
+            # Hide password hashes from admin_users
+            data = []
+            for r in rows:
+                row_dict = dict(r)
+                if table_name == "admin_users" and "password_hash" in row_dict:
+                    row_dict["password_hash"] = "***hidden***"
+                data.append(row_dict)
 
-        return {
-            "table": table_name,
-            "columns": column_names,
-            "rows": data,
-            "total": len(data),
-        }
+            return {
+                "table": table_name,
+                "columns": column_names,
+                "rows": data,
+                "total": len(data),
+            }
+    else:
+        with _get_conn() as conn:
+            cols = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+            column_names = [c[1] for c in cols]
+            rows = conn.execute(f"SELECT * FROM {table_name} LIMIT ?", (limit,)).fetchall()
+
+            # Hide password hashes from admin_users
+            data = []
+            for r in rows:
+                row_dict = dict(r)
+                if table_name == "admin_users" and "password_hash" in row_dict:
+                    row_dict["password_hash"] = "***hidden***"
+                data.append(row_dict)
+
+            return {
+                "table": table_name,
+                "columns": column_names,
+                "rows": data,
+                "total": len(data),
+            }
 
 
 init_db()

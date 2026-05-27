@@ -1,59 +1,79 @@
 import os
 import logging
 from typing import List, Dict
+import requests
 
 logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self):
-        self.model_id = "Qwen/Qwen2.5-0.5B-Instruct"
-        self.pipeline = None
-        self._load_pipeline()
-
-    def _load_pipeline(self):
-        try:
-            import torch
-            from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer
-            
-            logger.info(f"[LLM] Loading HuggingFace model '{self.model_id}' on CPU...")
-            tokenizer = AutoTokenizer.from_pretrained(self.model_id)
-            model = AutoModelForCausalLM.from_pretrained(
-                self.model_id
-            )
-            self.pipeline = pipeline(
-                "text-generation",
-                model=model,
-                tokenizer=tokenizer,
-                max_new_tokens=512,
-                do_sample=True,
-                temperature=0.2
-            )
-            logger.info(f"[LLM] HuggingFace: loaded '{self.model_id}' successfully")
-        except Exception as e:
-            logger.error(f"Failed to load HF pipeline: {e}")
-            self.pipeline = None
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.model_name = "gemini-1.5-flash"
+        if not self.api_key:
+            logger.warning("[LLM] GEMINI_API_KEY environment variable is not set!")
 
     def complete(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        if not self.pipeline:
-            return "Error: LLM pipeline not initialized. Ensure you have the required dependencies."
+        api_key = self.api_key or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return "Error: GEMINI_API_KEY is not configured. Please set the GEMINI_API_KEY environment variable."
+
+        # Extract system prompt(s)
+        system_prompts = [m["content"] for m in messages if m["role"] == "system"]
+        system_instruction = "\n\n".join(system_prompts) if system_prompts else ""
+
+        # Map other messages to Gemini's content format
+        contents = []
+        for m in messages:
+            if m["role"] == "system":
+                continue
+            
+            # Map role
+            role = m.get("role", "user")
+            if role in ["bot", "assistant", "model"]:
+                gemini_role = "model"
+            else:
+                gemini_role = "user"
+                
+            contents.append({
+                "role": gemini_role,
+                "parts": [{"text": m.get("content", "")}]
+            })
+
+        # Make sure contents is not empty
+        if not contents:
+            return ""
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={api_key}"
+        headers = {"Content-Type": "application/json"}
         
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": kwargs.get("temperature", 0.2),
+                "maxOutputTokens": kwargs.get("max_tokens", 512)
+            }
+        }
+        
+        if system_instruction:
+            payload["systemInstruction"] = {
+                "parts": [{"text": system_instruction}]
+            }
+
         try:
-            prompt = ""
-            for m in messages:
-                role = m.get("role", "user")
-                content = m.get("content", "")
-                prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
-            prompt += "<|im_start|>assistant\n"
+            response = requests.post(url, json=payload, headers=headers, timeout=15)
+            response.raise_for_status()
+            res_json = response.json()
             
-            outputs = self.pipeline(prompt, max_new_tokens=kwargs.get("max_tokens", 512), temperature=kwargs.get("temperature", 0.2))
-            generated_text = outputs[0]["generated_text"]
+            # Extract response text
+            candidates = res_json.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if parts:
+                    return parts[0].get("text", "").strip()
             
-            if "<|im_start|>assistant\n" in generated_text:
-                answer = generated_text.split("<|im_start|>assistant\n")[-1].strip()
-                if answer.endswith("<|im_end|>"):
-                    answer = answer[:-9].strip()
-                return answer
-            return generated_text.strip()
+            return "Error: Could not extract text from Gemini response."
         except Exception as e:
-            logger.error(f"Generation error: {e}")
-            return f"Error running local LLM: {str(e)}"
+            logger.error(f"Gemini generation error: {e}")
+            if 'response' in locals() and response is not None:
+                logger.error(f"Response content: {response.text}")
+            return f"Error calling Gemini API: {str(e)}"

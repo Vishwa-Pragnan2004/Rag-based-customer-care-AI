@@ -22,9 +22,9 @@ An intelligent customer care system for AC services, powered by **RAG (Retrieval
 - **JWT-authenticated** admin login
 - **Dashboard** — real-time stats (customers, tickets, escalations)
 - **Customer Management** — searchable user registry
-- **Appointment Tracking** — 5-step status pipeline:
+- **Appointment Tracking** — 4-step status pipeline:
   ```
-  Requested → Booked → Technician Assigned → In Progress → Completed
+  Requested → Booked → In Progress → Completed
   ```
 - **Escalations Viewer** — monitor escalated tickets
 - **DB Viewer** — raw database table browser
