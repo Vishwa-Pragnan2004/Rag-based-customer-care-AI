@@ -1,136 +1,112 @@
-# 🧊 FrostGuard AC Services — RAG-Based Customer Care AI
+# 🧊 FrostGuard AC Services — Cloud-Native Customer Care AI
 
-An intelligent customer care system for AC services, powered by **RAG (Retrieval-Augmented Generation)** and a local LLM. Features a user-facing AI chatbot and a full admin dashboard for managing appointments, customers, and service tickets.
+An intelligent, cloud-native customer care system for AC services, powered by **RAG (Retrieval-Augmented Generation)**, the **Google Gemini API**, and **Supabase**. It features a user-facing AI chatbot and a full admin dashboard for managing appointments, customers, and service tickets.
+
+This project is fully optimized for **Vercel Serverless** deployment and can be hosted **100% free of cost**.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)
-![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase)
+![Vercel](https://img.shields.io/badge/Vercel-Deployment-000000?logo=vercel)
 
 ---
 
 ## ✨ Features
 
 ### 🤖 AI Chatbot (User-Facing)
-- Natural language appointment booking (installation, repair, AMC, gas refill)
-- Ticket status tracking with ticket IDs
-- FAQ answering via RAG (Retrieval-Augmented Generation)
-- Escalation to human agents
-- Powered by **Qwen 2.5 (0.5B)** running locally — no API keys needed
+- **Natural language appointment booking** (installation, repair, AMC, gas refill).
+- **Ticket status tracking** using ticket IDs.
+- **FAQ answering** via dynamic RAG (Retrieval-Augmented Generation).
+- **Escalation to human agents** when requested.
+- **Powered by Google Gemini 1.5 Flash** (Free Tier) — fast response times, zero server overhead.
 
 ### 🔐 Admin Dashboard
-- **JWT-authenticated** admin login
-- **Dashboard** — real-time stats (customers, tickets, escalations)
-- **Customer Management** — searchable user registry
-- **Appointment Tracking** — 4-step status pipeline:
-  ```
-  Requested → Booked → In Progress → Completed
-  ```
-- **Escalations Viewer** — monitor escalated tickets
-- **DB Viewer** — raw database table browser
-- **Status Updates** — assign technicians, set arrival dates, add notes
+- **JWT-authenticated** admin login.
+- **Dashboard Overview** — real-time stats (customers, appointments, escalations).
+- **Customer Management** — registry of customers and their history.
+- **Appointment Tracking** — status pipelines: *Requested → Booked → In Progress → Completed*.
+- **DB Viewer** — raw database table browser for admins.
+- **Status Updates** — assign technicians, set arrival dates, add notes.
 
 ---
 
-## 🏗️ Tech Stack
+## 🏗️ Cloud-Optimized Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 19 + Vite |
-| **Backend** | FastAPI + Uvicorn |
-| **AI/LLM** | HuggingFace Transformers (Qwen 2.5-0.5B-Instruct) |
-| **RAG** | Sentence-Transformers + FAISS |
-| **Database** | SQLite |
-| **Auth** | JWT (PyJWT) + bcrypt |
+| Layer | local offline (Original) | cloud-ready (Current) |
+| :--- | :--- | :--- |
+| **Frontend** | React 19 + Vite | React 19 + Vite (Vercel) |
+| **Backend** | FastAPI + Uvicorn | FastAPI (Vercel Serverless) |
+| **AI/LLM** | Qwen 2.5-0.5B (Local CPU) | **Google Gemini 1.5 Flash** (API) |
+| **RAG Store** | FAISS + Sentence-Transformers | **Gemini text-embedding-004** + Pure Python Cosine Similarity |
+| **Database** | SQLite (Local file) | **Supabase PostgreSQL** (or SQLite fallback) |
+| **Auth** | JWT + bcrypt | JWT + bcrypt |
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Getting Started (Local Development)
 
-### Prerequisites
+The application operates in **dual-database mode**: if `DATABASE_URL` is omitted, it automatically falls back to a local SQLite database for instant offline testing.
+
+### 1. Prerequisites
 - Python 3.10+
 - Node.js 18+
-- pip
 
-### 1. Clone the repo
+### 2. Clone the Repository
 ```bash
 git clone https://github.com/Vishwa-Pragnan2004/Rag-based-customer-care-AI.git
 cd Rag-based-customer-care-AI
 ```
 
-### 2. Backend Setup
-```bash
-# Install Python dependencies
-pip install -r backend/requirements.txt
+### 3. Backend Setup
+1. Create a virtual environment and install dependencies:
+   ```bash
+   python -m venv venv
+   # On Windows:
+   venv\Scripts\activate
+   # On Mac/Linux:
+   source venv/bin/activate
+   
+   pip install -r backend/requirements.txt
+   ```
+2. Copy `backend/.env.example` to `backend/.env` and add your **Gemini API Key** (obtainable for free from [Google AI Studio](https://aistudio.google.com/)):
+   ```env
+   GEMINI_API_KEY=your_gemini_key_here
+   # Optional: Add your Supabase PostgreSQL connection URI if testing cloud DB locally
+   DATABASE_URL=
+   ```
+3. Start the FastAPI backend:
+   ```bash
+   python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+   ```
 
-# Start the backend (from project root)
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-> The first run will download the Qwen 2.5 model (~500MB). Subsequent runs use the cached model.
-
-### 3. Frontend Setup
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### 4. Open in Browser
-| Page | URL |
-|------|-----|
-| **Chatbot** | http://localhost:5173/ |
-| **Admin Panel** | http://localhost:5173/admin |
-
-**Admin Credentials:** `admin` / `frostguard2024`
-
----
-
-## 📁 Project Structure
-
-```
-├── backend/
-│   ├── main.py                 # FastAPI app entry point
-│   ├── requirements.txt        # Python dependencies
-│   ├── .env                    # Environment config
-│   ├── data/                   # FAQ knowledge base (.txt files)
-│   ├── db/                     # SQLite database (auto-created)
-│   ├── models/
-│   │   └── schemas.py          # Pydantic request/response models
-│   ├── routes/
-│   │   ├── chat.py             # Chatbot API endpoint
-│   │   └── admin.py            # Admin API endpoints (JWT-protected)
-│   └── services/
-│       ├── agent.py            # AI agent pipeline (intent → tool → response)
-│       ├── auth.py             # JWT authentication
-│       ├── database.py         # SQLite operations + migrations
-│       ├── llm.py              # Local LLM service (Qwen 2.5)
-│       ├── logger.py           # Conversation logging
-│       ├── rag.py              # RAG: FAISS vector search
-│       └── tools.py            # Tool registry (booking, status, etc.)
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx             # Main chatbot UI
-│   │   ├── components/         # Chat UI components
-│   │   ├── pages/admin/        # Admin dashboard pages
-│   │   └── styles/admin.css    # Admin panel dark theme
-│   └── package.json
-└── README.md
-```
+### 4. Frontend Setup
+1. Navigate to the frontend directory and install npm packages:
+   ```bash
+   cd frontend
+   npm install
+   ```
+2. Start the Vite development server:
+   ```bash
+   npm run dev
+   ```
+3. Open `http://localhost:5173/` in your browser. (The Admin Panel is located at `http://localhost:5173/admin` — Default Credentials: `admin` / `frostguard2024`).
 
 ---
 
-## 🔧 Services & Pricing
+## ☁️ Production Deployment on Vercel (100% Free)
 
-| Service | Price |
-|---------|-------|
-| AC Installation | ₹1,500 |
-| AC Repair | ₹500 (visit) + parts |
-| Annual Maintenance (AMC) | ₹2,500/year |
-| Gas Refill | ₹2,000 |
+You can deploy the entire stack on Vercel for free under a single domain.
 
----
-
-## 📄 License
-
-This project is for educational/demo purposes.
+1. **Host a Supabase Database**:
+   * Create a free project on [Supabase](https://supabase.com/).
+   * Copy the transaction PostgreSQL URI from **Settings -> Database** (ensure it ends with `?sslmode=require`).
+2. **Push to GitHub**:
+   * Commit all your local changes and push them to your GitHub repository.
+3. **Import to Vercel**:
+   * Log into [Vercel](https://vercel.com) and click **Add New -> Project**.
+   * Import your GitHub repository.
+   * Under **Environment Variables**, add the following keys:
+     - `GEMINI_API_KEY` = `your-gemini-api-key`
+     - `DATABASE_URL` = `your-supabase-postgresql-connection-string`
+   * Click **Deploy**. Vercel will automatically build the React frontend and deploy the FastAPI backend as a serverless function using the root `vercel.json` configurations.
