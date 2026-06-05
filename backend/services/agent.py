@@ -164,10 +164,14 @@ class AgentPipeline:
 
         # --- Intent detection ---
         intent = "general"
-        if any(kw in q_lower for kw in ["book", "appointment", "install", "repair", "fix", "amc", "gas refill", "schedule", "service needed"]):
-            intent = "appointment"
-        elif any(kw in q_lower for kw in ["status", "ticket", "tkt", "track", "where is", "check my"]):
+        
+        # Prioritize ticket tracking if a ticket ID prefix or key status terms are mentioned
+        if any(kw in q_lower for kw in ["tkt-", "ticket", "tkt", "track"]):
             intent = "ticket_status"
+        elif any(kw in q_lower for kw in ["status", "where is", "check my"]) and not any(kw in q_lower for kw in ["book ", "book a", "book an", "schedule"]):
+            intent = "ticket_status"
+        elif any(kw in q_lower for kw in ["book", "appointment", "install", "repair", "fix", "amc", "gas refill", "schedule", "service needed"]):
+            intent = "appointment"
         elif any(kw in q_lower for kw in ["escalate", "human", "agent", "talk to", "speak to", "real person"]):
             intent = "escalation"
 
