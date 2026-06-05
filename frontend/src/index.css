@@ -1,5 +1,5 @@
 /* ============================================================
-   Design System — FrostGuard AC Services
+   Design System â€” FrostGuard AC Services
    Dark glassmorphism theme with purple/blue accent palette
    ============================================================ */
 
@@ -673,4 +673,4 @@ body {
   .bubble { padding: var(--spacing-sm) var(--spacing-md); font-size: 0.875rem; }
   .welcome-title { font-size: 1.25rem; }
   .suggestion-chips { gap: var(--spacing-xs); }
-}
+}
