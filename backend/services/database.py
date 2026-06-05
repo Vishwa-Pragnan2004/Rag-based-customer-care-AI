@@ -64,7 +64,12 @@ def _get_conn():
         conn = psycopg2.connect(DATABASE_URL)
         return PostgresConnectionWrapper(conn)
     else:
-        db_dir = os.path.join(os.path.dirname(__file__), "..", "db")
+        # Fallback to local SQLite. If running in a read-only serverless environment (Vercel), use the writeable /tmp directory
+        if os.getenv("VERCEL"):
+            db_dir = "/tmp"
+        else:
+            db_dir = os.path.join(os.path.dirname(__file__), "..", "db")
+            
         os.makedirs(db_dir, exist_ok=True)
         db_path = os.path.join(db_dir, "frostguard.db")
         conn = sqlite3.connect(db_path)
