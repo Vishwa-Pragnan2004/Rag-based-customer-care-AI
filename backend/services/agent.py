@@ -1,8 +1,8 @@
 import re, json, logging
-from .llm import LLMService
-from .rag import RAGService
-from .tools import call_tool
-from ..models.schemas import ToolCall
+from services.llm import LLMService
+from services.rag import RAGService
+from services.tools import call_tool
+from models.schemas import ToolCall
 
 logger = logging.getLogger(__name__)
 

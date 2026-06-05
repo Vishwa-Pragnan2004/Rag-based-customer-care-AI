@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from ..models.schemas import AdminLoginRequest, AdminLoginResponse, AppointmentUpdateRequest
-from ..services.auth import create_token, get_current_admin
-from ..services.database import (
+from models.schemas import AdminLoginRequest, AdminLoginResponse, AppointmentUpdateRequest
+from services.auth import create_token, get_current_admin
+from services.database import (
     verify_admin, get_dashboard_stats, get_all_customers,
     get_all_appointments, get_appointment_detail, update_appointment_status,
     get_all_escalations, get_db_tables, get_table_data
 )
-from .chat import agent
+from routes.chat import agent
 
 router = APIRouter()
 
