@@ -48,8 +48,8 @@ class AgentPipeline:
                 details["service_type"] = "gas_refill"
 
         # === MOBILE NUMBER ===
-        # Match 10-digit Indian mobile numbers, with or without +91 prefix
-        mob_match = re.search(r'(?:\+91[\s\-]?)?(\d[\s\-]?)?\b([6-9]\d{9})\b', text)
+        # Match any 10-digit mobile number, with or without +91 prefix
+        mob_match = re.search(r'(?:\+91[\s\-]?)?(\d[\s\-]?)?\b(\d{10})\b', text)
         if mob_match:
             details["mobile"] = mob_match.group(2).strip()
 
