@@ -18,7 +18,7 @@ window.fetch = function (url, options) {
   let targetUrl = url;
   if (typeof targetUrl === 'string' && targetUrl.startsWith('http://localhost:8000')) {
     if (window.location.hostname !== 'localhost') {
-      targetUrl = targetUrl.replace('http://localhost:8000', window.location.origin);
+      targetUrl = targetUrl.replace('http://localhost:8000', window.location.origin + '/_/backend');
     }
   }
   return originalFetch(targetUrl, options);
