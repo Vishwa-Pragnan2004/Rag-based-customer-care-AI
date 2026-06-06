@@ -3,6 +3,10 @@ import sys
 # Add the current directory (backend/) to sys.path so absolute imports resolve under any working directory context
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from dotenv import load_dotenv
+# Load environment variables from the .env file in the backend directory
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import chat, admin
