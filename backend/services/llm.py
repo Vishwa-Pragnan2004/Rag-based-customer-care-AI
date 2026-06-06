@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 class LLMService:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
-        self.model_name = "gemini-1.5-flash"
+        self.model_name = "gemini-2.5-flash"
         if not self.api_key:
             logger.warning("[LLM] GEMINI_API_KEY environment variable is not set!")
 

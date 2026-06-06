@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 class RAGService:
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
-        self.model_name = "text-embedding-004"
+        self.model_name = "gemini-embedding-2"
         self.chunks = []
         self.embeddings = []  # List of embedding vectors
         self.is_ready = False
